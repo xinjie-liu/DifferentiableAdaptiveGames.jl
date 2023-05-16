@@ -1,0 +1,30 @@
+name = "MCPGameSolver"
+uuid = "1d8f440e-ba00-40a0-93f9-d69855168553"
+authors = ["Lasse Peters <lasse.peters@mailbox.org>", "Xinjie Liu"]
+version = "0.1.0-dev"
+
+[deps]
+BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+DifferentiableTrajectoryOptimization = "86fad55d-71c6-41a1-96ed-88d107dcd2ba"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+LiftedTrajectoryGames = "f0ea6279-6eb1-4d7a-a045-07bc2fa39d95"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+PATHSolver = "f5f7c340-0bb3-5c69-969a-41884d311d1b"
+ParametricMCPs = "9b992ff8-05bb-4ea1-b9d2-5ef72d82f7ad"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+TrajectoryGamesBase = "ac1ac542-73eb-4349-ae1b-660ab3609574"
+TrajectoryGamesExamples = "ff3fa34c-8d8f-519c-b5bc-31760c52507a"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[compat]
+julia = "1.7"
