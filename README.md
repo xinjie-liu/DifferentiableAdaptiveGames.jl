@@ -1,4 +1,4 @@
-![License](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/licenses/MIT)
 
 # DifferentiableAdaptiveGames
 An adaptive game-theoretic planner that jointly infers players' objectives and solves for generalized Nash equilibrium trajectories, enabled by differentiating through a trajectory game solver. This is a software package produced by research [Learning to Play Trajectory Games Against Opponents with Unknown Objectives](https://xinjie-liu.github.io/projects/game/). Please consult the project website for more information. 
