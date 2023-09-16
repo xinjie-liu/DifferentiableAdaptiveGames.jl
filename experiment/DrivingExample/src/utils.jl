@@ -1,4 +1,4 @@
-#======== environment (dispatch of TrajectoryGamesBase) =========#
+#======== environment =========#
 
 struct RoadwayEnvironment{T}
     set::T
@@ -12,7 +12,36 @@ function RoadwayEnvironment(vertices::AbstractVector{<:AbstractVector{<:Real}}, 
     RoadwayEnvironment(LazySets.VPolytope(vertices), roadway, lane_id_per_player, radius)
 end
 
-function plot_wall_constraint() end
+function construct_roadway(ll, lw, mp, θ)
+    # Roadway points
+	x1  = [ ll,  0.]
+	x2  = [ ll,  lw]
+	x3  = [ 0.,  lw]
+	x4  = [ 0.,  0.]
+	x5  = [ 0., -lw]
+	x6  = [ ll, -lw]
+
+	x7  = [ mp,  0.]
+	x8  = [ mp+lw*tan(θ), -lw]
+	x9  = [ mp+lw/tan(θ),  lw]
+	x10 = [ mp+lw*tan(θ)+lw/tan(θ), 0.]
+	x11 = [ mp-mp*cos(θ), -mp*sin(θ)]
+	x12 = [ mp+lw*tan(θ)-mp*cos(θ), -lw-mp*sin(θ)]
+
+    vertices = Vector([x3, x2, x6, x8, x12, x11, x5])
+    roadway_opts = MergingRoadwayOptions(lane_length = ll, lane_width = lw, merging_point = mp, merging_angle = θ)
+    roadway = build_roadway(roadway_opts)
+    
+    vertices, roadway
+end 
+
+function construct_env(num_player, ego_agent_id, vertices, roadway, collision_radius)
+    player_lane_id = 3 * ones(Int, num_player)
+    player_lane_id[ego_agent_id] = 4
+    environment = RoadwayEnvironment(vertices, roadway, player_lane_id, collision_radius)
+
+    environment
+end
 
 function TrajectoryGamesBase.get_constraints(env::RoadwayEnvironment, player_idx)
     lane = env.roadway.lane[env.lane_id_per_player[player_idx]]
@@ -41,6 +70,20 @@ function TrajectoryGamesBase.get_constraints(env::RoadwayEnvironment, player_idx
         end
         vcat(wall_constraints, circle_constraints)
     end
+end
+
+function construct_game(num_player; min_distance = 2 * collision_radius, hard_constraints, 
+    collision_avoidance_coefficient, environment, max_velocity, max_acceleration, max_ϕ)
+    dynamics = BicycleDynamics(; 
+        l = 0.1,
+        state_bounds = (; lb = [-Inf, -Inf, -max_velocity, -Inf], ub = [Inf, Inf, max_velocity, Inf]),
+        control_bounds = (; lb = [-max_acceleration, -max_ϕ], ub = [max_acceleration, max_ϕ]),
+        integration_scheme = :reverse_euler
+    )
+    game = highway_game(num_player; min_distance, hard_constraints, collision_avoidance_coefficient,
+        environment, dynamics)
+
+    game
 end
 
 #======== data processing =========#
@@ -321,8 +364,9 @@ function visualize_trajectories()
         end
     end
     save("trajectories.png", fig, px_per_unit = 2)
-    # Main.Infiltrator.@infiltrate
 end
+
+#======== quantitative results =========#
 
 function compute_backprop_timing()
     num_trials = 19
@@ -427,7 +471,6 @@ function compute_solver_statistics()
         # delete!(raw_statistics, "ground_truth")
         # delete!(solver_statistics, "ground_truth")
     end
-    # Main.Infiltrator.@infiltrate
  
     results = Dict()
     raw_results = Dict()
@@ -496,44 +539,116 @@ function compute_solver_statistics()
         CSV.write("data/results.csv", Dict("solver name" => solver); append = true)
         CSV.write("data/results.csv", results[solver]; append = true)
     end
-    # fig_ = Makie.Figure()
-    # solver_names = keys(solver_statistics) |> collect
-    # properties = ["parameter inference error [m]", "open-loop prediction error [m]",
-    #     "closed-loop prediction error [m]", "solving time [s]"]
-    # line_colors = Dict("backprop" => "#FE5225", "inverseMCP" => "#FF8100", "mpc" => "#52BCB5")
-    # band_colors = Dict("backprop" => "#FFC8C9", "inverseMCP" => "#FFDCB7", "mpc" => "#CEEBE9")
-    # axes = []
-    # for i in 1:length(properties)
-    #     axis = Axis(fig_[i, 1]; title = properties[i], xlabel = "time step", ylabel = properties[i])
-    #     push!(axes, axis)
-    #     for solver in solver_names
-    #         data = solver_statistics[solver][properties[i]]
-    #         band!(axes[i], 1:length(data.mean), data.mean - data.std, data.mean + data.std, 
-    #             label = solver, color = band_colors[solver], transparency = true, shading = false)
-    #         lines!(axes[i], 1:length(data.mean), data.mean, color = line_colors[solver], transparency = true,
-    #             shading = false)
-    #     end
-    # end
-    # fig_[0, 1] = Legend(fig_, axes[2], "Solver", framevisible = false, 
-    #     orientation = :horizontal, tellwidth = false, tellheight = true)
-
-    # fig_cost = Makie.Figure()
-    # violin_idx = Dict("backprop" => 1, "inverseMCP" => 2, "mpc" => 3)
-    # xs = Float32[]
-    # ys = Float32[]
-    # for solver in solver_names
-    #     cost = [cost[2] for cost in raw_statistics[solver]["interaction cost"]] # only cost for 2nd player
-    #     append!(ys, cost)
-    #     append!(xs, fill(violin_idx[solver], length(cost)))
-    # end
-    # axis = Axis(fig_cost[1, 1]; title = "interaction cost", xlabel = "solver", ylabel = "cost")
-    # violin!(axis, xs, ys)
-    # TODO: also include the collision times
-    #save("prediction_errors.png", fig_, px_per_unit = 15.5)
-    # save("interaction_costs.png", fig_cost)
 end
 
 #================== other ================#
+
+function interactive_inference_by_backprop(
+    mcp_game, initial_state, τs_observed, 
+    initial_estimation, ego_goal; 
+    max_grad_steps = 150, lr = 1e-3, last_solution = nothing,
+    num_player, ego_agent_id, observation_opponents_idx_set,
+    ego_state_idx, 
+)
+    """
+    back-propagation of the differentiable MCP solver
+    """
+    function likelihood_cost(τs_observed, goal_estimation, initial_state)
+        solution = MCPGameSolver.solve_mcp_game(mcp_game, initial_state, 
+            goal_estimation; initial_guess = last_solution)
+        if solution.status != PATHSolver.MCP_Solved
+            @info "Inner solve did not converge properly, re-initializing..."
+            solution = MCPGameSolver.solve_mcp_game(mcp_game, initial_state, 
+                goal_estimation; initial_guess = nothing)
+        end
+        push!(solving_info, solution.info)
+        last_solution = solution.status == PATHSolver.MCP_Solved ? (; primals = ForwardDiff.value.(solution.primals),
+        variables = ForwardDiff.value.(solution.variables), status = solution.status) : nothing
+        τs_solution = solution.variables[observation_opponents_idx_set]
+        
+        if solution.status == PATHSolver.MCP_Solved
+            infeasible_counter = 0
+        else
+            infeasible_counter += 1
+        end
+        norm_sqr(τs_observed - τs_solution)
+    end
+    infeasible_counter = 0
+    solving_info = []
+    goal_estimation = initial_estimation
+    i_ = 0
+    time_exec = 0
+    for i in 1:max_grad_steps
+        i_ = i
+        # clip the estimation by the lower and upper bounds
+        for ii in 1:num_player
+            if ii != ego_agent_id
+                goal_estimation[Block(ii)] = clamp.(goal_estimation[Block(ii)], [-0.2, 0], [0.2, 1])
+            end
+        end
+        goal_estimation[Block(ego_agent_id)] = ego_goal
+
+        # REVERSE diff
+        # original_cost = likelihood_cost(τs_observed, goal_estimation)
+        # gradient = Zygote.gradient(likelihood_cost, τs_observed, goal_estimation)
+        
+        # FORWARD diff
+        grad_step_time = @elapsed gradient = Zygote.gradient(τs_observed, goal_estimation, initial_state) do τs_observed, goal_estimation, initial_state
+            Zygote.forwarddiff([goal_estimation; initial_state]; chunk_threshold = length(goal_estimation) + length(initial_state)) do θ
+                goal_estimation = BlockVector(θ[1:length(goal_estimation)], blocksizes(goal_estimation)[1])
+                initial_state = BlockVector(θ[(length(goal_estimation) + 1):end], blocksizes(initial_state)[1])
+                likelihood_cost(τs_observed, goal_estimation, initial_state)
+            end
+        end
+        time_exec += grad_step_time
+        objective_grad = gradient[2]
+        x0_grad = gradient[3]
+        x0_grad[ego_state_idx] .= 0 # cannot modify the ego state
+        clamp!(objective_grad, -50, 50)
+        clamp!(x0_grad, -10, 10)
+        objective_update = lr * objective_grad
+        x0_update = 1e-3 * x0_grad
+        if norm(objective_update) < 1e-4 && norm(x0_update) < 1e-4
+            @info "Inner iteration terminates at iteration: "*string(i)
+            break
+        elseif infeasible_counter >= 4
+            @info "Inner iteration reached the maximal infeasible steps"
+            break
+        end
+        goal_estimation -= objective_update
+        initial_state -= x0_update
+    end
+    (; goal_estimation, last_solution, i_, solving_info, time_exec)
+end
+
+function construct_observation_index_set(;
+    num_player, ego_agent_id, vector_size, state_dimension, mcp_game,
+)
+    observation_opponents_idx_set = mapreduce(vcat, 1:num_player) do ii
+        if ii != ego_agent_id
+            index = []
+            for jj in 1:vector_size
+                offset = state_dimension * (jj - 1)
+                # partial observation
+                index = vcat(index, mcp_game.index_sets.τ_idx_set[ii][[offset + 1, offset + 2, offset + 4]])
+            end     
+        else
+            index = []
+        end
+        # # full observation
+        # index = ii != ego_agent_id ? mcp_game.index_sets.τ_idx_set[ii][1:(vector_size * state_dimension)] : []
+        index
+    end
+    sort!(observation_opponents_idx_set)
+
+    observation_opponents_idx_set
+end
+
+function erase_last_solution!(receding_horizon_strategy)
+    # clean up the last solution
+    receding_horizon_strategy.last_solution = nothing
+    receding_horizon_strategy.solution_status = nothing
+end
 
 function create_dummy_strategy(game, system_state, control_dimension, horizon, player_id, rng;
     max_acceleration = nothing, strategy_type = "zero_input")

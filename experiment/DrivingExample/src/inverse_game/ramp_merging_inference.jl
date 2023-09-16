@@ -1,187 +1,58 @@
-function ramp_merging_inference(; number_trials = 1, solver = nothing)
-
-    function interactive_inference_by_backprop(mcp_game, initial_state, τs_observed, 
-        initial_estimation, ego_goal; max_grad_steps = 150, lr = 1e-3, last_solution = nothing)
-        """
-        back-propagation of the differentiable MCP solver
-        """
-        function likelihood_cost(τs_observed, goal_estimation, initial_state)
-            solution = MCPGameSolver.solve_mcp_game(mcp_game, initial_state, 
-                goal_estimation; initial_guess = last_solution)
-            if solution.status != PATHSolver.MCP_Solved
-                @info "Inner solve did not converge properly, re-initializing..."
-                solution = MCPGameSolver.solve_mcp_game(mcp_game, initial_state, 
-                    goal_estimation; initial_guess = nothing)
-            end
-            push!(solving_info, solution.info)
-            last_solution = solution.status == PATHSolver.MCP_Solved ? (; primals = ForwardDiff.value.(solution.primals),
-            variables = ForwardDiff.value.(solution.variables), status = solution.status) : nothing
-            τs_solution = solution.variables[observation_opponents_idx_set]
-            
-            if solution.status == PATHSolver.MCP_Solved
-                infeasible_counter = 0
-            else
-                infeasible_counter += 1
-            end
-
-            norm_sqr(τs_observed - τs_solution) #+ 0.01 * norm_sqr(goal_estimation)
-        end
-        infeasible_counter = 0
-        solving_info = []
-        goal_estimation = initial_estimation
-        i_ = 0
-        time_exec = 0
-        for i in 1:max_grad_steps
-            i_ = i
-            # clip the estimation by the lower and upper bounds
-            for ii in 1:num_player
-                if ii != ego_agent_id
-                    goal_estimation[Block(ii)] = clamp.(goal_estimation[Block(ii)], [-0.2, 0], [0.2, 1])
-                end
-            end
-            goal_estimation[Block(ego_agent_id)] = ego_goal
-
-            # REVERSE diff
-            # original_cost = likelihood_cost(τs_observed, goal_estimation)
-            # gradient = Zygote.gradient(likelihood_cost, τs_observed, goal_estimation)
-            
-            # FORWARD diff
-            grad_step_time = @elapsed gradient = Zygote.gradient(τs_observed, goal_estimation, initial_state) do τs_observed, goal_estimation, initial_state
-                Zygote.forwarddiff([goal_estimation; initial_state]; chunk_threshold = length(goal_estimation) + length(initial_state)) do θ
-                    goal_estimation = BlockVector(θ[1:length(goal_estimation)], blocksizes(goal_estimation)[1])
-                    initial_state = BlockVector(θ[(length(goal_estimation) + 1):end], blocksizes(initial_state)[1])
-                    likelihood_cost(τs_observed, goal_estimation, initial_state)
-                end
-            end
-            time_exec += grad_step_time
-            objective_grad = gradient[2]
-            x0_grad = gradient[3]
-            x0_grad[ego_state_idx] .= 0 # cannot modify the ego state
-            clamp!(objective_grad, -50, 50)
-            clamp!(x0_grad, -10, 10)
-            objective_update = lr * objective_grad
-            x0_update = 1e-3 * x0_grad
-            if norm(objective_update) < 1e-4 && norm(x0_update) < 1e-4
-                @info "Inner iteration terminates at iteration: "*string(i)
-                break
-            elseif infeasible_counter >= 4
-                @info "Inner iteration reached the maximal infeasible steps"
-                break
-            end
-            goal_estimation -= objective_update
-            initial_state -= x0_update
-        end
-        (; goal_estimation, last_solution, i_, solving_info, time_exec)
-    end
+function ramp_merging_inference(; 
+    number_trials = 1, solver = nothing, num_player = 4, ego_agent_id = 1, 
+    ll = 4.0, lw = 0.24, mp = 1.2, θ  = pi / 12, # roadway parameters
+    collision_radius = 0.08, max_velocity = 0.5, max_acceleration = 1.0, max_ϕ = π/4,
+    collision_avoidance_coefficient = 400, hard_constraints = true, # collision avoidance inequalities
+    rng = Random.MersenneTwister(1), horizon = 10, n_sim_steps = 120,
+    vector_size = 10, # number of position points that the ego keeps as observation
+    turn_length = 1, # number of steps to take along the MPGP horizon
+    max_grad_steps = 10, # max online gradient steps for our method
+)
 
     #=================================#
-    # beginning of the experiment loop
+    # Construction of game objects
     #=================================#
-
-    num_player = 4
-    ego_agent_id = 1
     opponents_id = deleteat!(Vector(1:num_player), ego_agent_id)
-
-	ll = 4.0
-	lw = 0.24
-	mp = 1.2
-	θ  = pi / 12
-    
-	x1  = [ ll,  0.]
-	x2  = [ ll,  lw]
-	x3  = [ 0.,  lw]
-	x4  = [ 0.,  0.]
-	x5  = [ 0., -lw]
-	x6  = [ ll, -lw]
-
-	x7  = [ mp,  0.]
-	x8  = [ mp+lw*tan(θ), -lw]
-	x9  = [ mp+lw/tan(θ),  lw]
-	x10 = [ mp+lw*tan(θ)+lw/tan(θ), 0.]
-	x11 = [ mp-mp*cos(θ), -mp*sin(θ)]
-	x12 = [ mp+lw*tan(θ)-mp*cos(θ), -lw-mp*sin(θ)]
-
-    vertices = Vector([x3, x2, x6, x8, x12, x11, x5])
-    roadway_opts = MergingRoadwayOptions(lane_length = ll, lane_width = lw, merging_point = mp, merging_angle = θ)
-    roadway = build_roadway(roadway_opts)
-    collision_radius = 0.08
-    player_lane_id = 3 * ones(Int, num_player)
-    player_lane_id[ego_agent_id] = 4
-    environment = RoadwayEnvironment(vertices, roadway, player_lane_id, collision_radius)
-    
-    max_velocity = 0.5
-    max_acceleration = 1.0
-    max_ϕ = π/4
-    collision_avoidance_coefficient = 400 #0.12
-    hard_constraints = true
-    game = highway_game(num_player; min_distance = 2 * collision_radius, hard_constraints,
-    collision_avoidance_coefficient,
-    environment,
-    dynamics = BicycleDynamics(; 
-        l = 0.1,
-        state_bounds = (; lb = [-Inf, -Inf, -max_velocity, -Inf], ub = [Inf, Inf, max_velocity, Inf]),
-        control_bounds = (; lb = [-max_acceleration, -max_ϕ], ub = [max_acceleration, max_ϕ]),
-        integration_scheme = :reverse_euler)
-    )
+    vertices, roadway = construct_roadway(ll, lw, mp, θ)
+    environment = construct_env(num_player, ego_agent_id, vertices, roadway, collision_radius)
+    game = construct_game(num_player; min_distance = 2 * collision_radius, hard_constraints, 
+        collision_avoidance_coefficient, environment, max_velocity, max_acceleration, max_ϕ)
     # for peters2021rss, a game without hard collision avoidance constraints
-    game_soft = highway_game(num_player; min_distance = 2 * collision_radius, hard_constraints = false,
-    collision_avoidance_coefficient,
-    environment,
-    dynamics = BicycleDynamics(;
-        l = 0.1,
-        state_bounds = (; lb = [-Inf, -Inf, -max_velocity, -Inf], ub = [Inf, Inf, max_velocity, Inf]),
-        control_bounds = (; lb = [-max_acceleration, -max_ϕ], ub = [max_acceleration, max_ϕ]),
-        integration_scheme = :reverse_euler)
-    )
-    rng = Random.MersenneTwister(1)
-    horizon = 10
-    n_sim_steps = 120
+    game_soft = construct_game(num_player; min_distance = 2 * collision_radius, hard_constraints = false, 
+        collision_avoidance_coefficient, environment, max_velocity, max_acceleration, max_ϕ)    
 
+    # sample players' initial states and goals
     initial_state_set, goal_dataset = highway_sampling(game, horizon, rng, num_player, ego_agent_id,
         collision_radius, number_trials; x0_range = 0.75, merging_scenario = true, vertices)
-
     initial_state = initial_state_set[1]
     system_state = initial_state
 
-    vector_size = 10 # number of state-action pairs that the ego keeps as history information
-    state_dimension = state_dim(game.dynamics.subsystems[1]) # assume each player has the same dimensions for simplification
+    state_dimension = state_dim(game.dynamics.subsystems[1])
     control_dimension = control_dim(game.dynamics.subsystems[1])
-    turn_length = 1
     ego_state_idx = let
         offset = ego_agent_id != 1 ? sum([blocksizes(initial_state)[1][ii] for ii in 1:(ego_agent_id - 1)]) : 0
         Vector((offset + 1):(offset + blocksizes(initial_state)[1][ego_agent_id]))
     end
-    solver_string_lst = ["backprop"] # solvers to compare, options: ground_truth, backprop (ours), inverseMCP (peters2021rss), mpc, heuristic_estimation (use initial states as goal estimation)
+    # solvers to compare, options: ground_truth, backprop (ours), inverseMCP (peters2021rss), mpc, 
+    # heuristic_estimation (use initial states as goal estimation)
+    solver_string_lst = ["backprop"]
 
-    #====================# # initialization of three solvers
+    #====================================#
+    # Initialization of different solvers
+    #====================================#
     # 1. differentiable mcp
     solver = @something(solver, MCPCoupledOptimizationSolver(game, horizon, blocksizes(goal_dataset[1], 1))) # public solver for the uncontrolled agents
     mcp_game = solver.mcp_game
-
-    observation_opponents_idx_set = mapreduce(vcat, 1:num_player) do ii
-        if ii != ego_agent_id
-            index = []
-            for jj in 1:vector_size
-                offset = state_dimension * (jj - 1)
-                # partial observation
-                index = vcat(index, mcp_game.index_sets.τ_idx_set[ii][[offset + 1, offset + 2, offset + 4]])
-            end     
-        else
-            index = []
-        end
-        # # full observation
-        # index = ii != ego_agent_id ? mcp_game.index_sets.τ_idx_set[ii][1:(vector_size * state_dimension)] : []
-        index
-    end
-    sort!(observation_opponents_idx_set)
+    observation_opponents_idx_set = construct_observation_index_set(;
+        num_player, ego_agent_id, vector_size, state_dimension, mcp_game,
+    )
     block_sizes_params = blocksizes(goal_dataset[1]) |> only
 
     if "inverseMCP" in solver_string_lst
         # 2. inverse mcp
         dim_params = length(goal_dataset[1]) - length(goal_dataset[1][Block(ego_agent_id)])
         inverse_problem = MCPGameSolver.InverseMCPProblem(game_soft, 
-            horizon; observation_index = observation_opponents_idx_set, 
-            dim_params,
+            horizon; observation_index = observation_opponents_idx_set, dim_params,
             params_processing_fn = create_params_processing_fn(block_sizes_params, ego_agent_id))
     end
     if "mpc" in solver_string_lst
@@ -194,8 +65,8 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
             opponents_id, opponent_block_sizes; min_distance = hard_constraints ? collision_radius * 2 : nothing,
             collision_avoidance_coefficient)
     end
-
     #====================#
+
     # strategy of the ego agent
     receding_horizon_strategy_ego =
         WarmStartRecedingHorizonStrategy(; solver, game, turn_length, context_state = nothing)
@@ -203,36 +74,27 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
     dummy_substrategy, _ = create_dummy_strategy(game, system_state,
         control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng)
 
+    #==========================#
+    # Begin of experiment loop
+    #==========================#
     for solver_string in solver_string_lst
         for trial in 1:length(goal_dataset)
-            println("#########################\n New Iteration: ", trial, "/", length(goal_dataset),
-                "\n#########################")
+            println("#########################\n New Iteration: ", trial, "/", length(goal_dataset), "\n#########################")
             goal = goal_dataset[trial]
-            initial_state = initial_state_set[trial]           
-            println("initial state: ", initial_state)
-            println("goal: ", goal)
+            initial_state = initial_state_set[trial]
             system_state = initial_state
-
             goal_estimation = nothing
             # strategy of the opponet
             receding_horizon_strategy =
                 WarmStartRecedingHorizonStrategy(; solver, game, turn_length, context_state = goal)
+            
             # initial solve for plotting
             strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, game, system_state, 
                 receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
-
             strategy.substrategies[ego_agent_id] = dummy_substrategy
             figure = Makie.Figure(resolution = (1200, 900))
-            visualization = visualize!(
-                figure,
-                game,
-                system_state,
-                strategy;
-                targets = nothing,
-                obstacle_radius = collision_radius,
-                ego_agent_id,
-                opponents_id
-            )
+            visualization = visualize!(figure, game, system_state, strategy; targets = nothing, obstacle_radius = collision_radius,
+                ego_agent_id, opponents_id)
             Makie.xlims!(visualization.environment_axis, -0.2, 4)
             Makie.ylims!(visualization.environment_axis, -1.5, 1.5) 
             display(figure)
@@ -241,23 +103,15 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
             xs_observation = Array{Float64}[]
             xs_pre = BlockArrays.BlockVector{Float64}[] # keep track of initial states for each inverse game solving
             last_solution = nothing # for warm-starting
-            # clean up the last solution
-            receding_horizon_strategy.last_solution = nothing
-            receding_horizon_strategy.solution_status = nothing
-            receding_horizon_strategy_ego.last_solution = nothing
-            receding_horizon_strategy_ego.solution_status = nothing
+            erase_last_solution!(receding_horizon_strategy)
+            erase_last_solution!(receding_horizon_strategy_ego)
+
+            # Start of the simulation loop
             for t in 1:n_sim_steps
-            """
-            Start of the simulation loop
-            """
-            # Makie.record(figure, solver_string*"sim_steps.mp4", 1:n_sim_steps; framerate = 15) do t
-                # strategy for opponents
-                record_data = true
                 time_exec_opponents = @elapsed strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, 
                     game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
                 if receding_horizon_strategy.solution_status != PATHSolver.MCP_Solved
                     if solver_string == "ground_truth"
-                        record_data = false
                         @info "Skipping the episode that ground truth fails..."
                         @goto end_of_episode
                     end
@@ -268,7 +122,7 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
                         game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
                 end
                 #===========================================================#
-                # player 2 infers player 1's objective and plan its motion
+                # player 2 infers player 1's objective and plan her motion
                 if length(xs_observation) < vector_size
                     dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
                         control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng)
@@ -283,8 +137,9 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
 
                         initial_estimation = !isnothing(goal_estimation) ? goal_estimation : random_goal
                         goal_estimation, last_solution, i_, info_, time_exec = interactive_inference_by_backprop(mcp_game, xs_pre[1],
-                            information_vector, initial_estimation, goal[Block(ego_agent_id)]; max_grad_steps = 30, lr = 2.1e-2, 
-                            last_solution = last_solution)
+                            information_vector, initial_estimation, goal[Block(ego_agent_id)]; max_grad_steps, lr = 2.1e-2, 
+                            last_solution = last_solution, num_player, ego_agent_id, observation_opponents_idx_set, ego_state_idx,
+                            )
                         receding_horizon_strategy_ego.context_state = goal_estimation
 
                         time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
@@ -326,10 +181,8 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
                         last_solution = solution.status == PATHSolver.MCP_Solved ? solution : nothing
                         goal_estimation = reproduce_goal_estimation(goal[Block(ego_agent_id)], block_sizes_params, ego_agent_id, 
                             solution.variables[1:dim_params])
-                        # goal_estimation = clamp.(goal_estimation, repeat([-lw, -max_velocity], num_player), repeat([lw, max_velocity], num_player))
 
                         receding_horizon_strategy_ego.context_state = goal_estimation
-                        # Main.Infiltrator.@infiltrate
                         time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
                             receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
                         if receding_horizon_strategy_ego.solution_status != PATHSolver.MCP_Solved
@@ -433,7 +286,6 @@ function ramp_merging_inference(; number_trials = 1, solver = nothing)
                 #===========================================================#
                 if visualization.skip_button.clicked[]
                     visualization.skip_button.clicked[] = false
-                    record_data = false
                     @info "Manually skipping the episode..."
                     @goto end_of_episode
                 end
