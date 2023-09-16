@@ -14,4 +14,25 @@ An adaptive game-theoretic planner that jointly infers players' objectives and s
   year={2022}
 }
 ```
+## Run the Ramp Merging Experiment
+
+1. Open REPL (Julia 1.9) in the directory `/experiment/DrivingExample`
+
+`julia`
+
+2. Activate the package environment
+
+`]activate .`
+
+3. Instantiate the environment if you haven't done so before
+
+`]instantiate`
+
+4. Precompile
+
+`using DrivingExample`
+
+5. Run the ramp merging example
+
+`DrivingExample.ramp_merging_inference()`
 
