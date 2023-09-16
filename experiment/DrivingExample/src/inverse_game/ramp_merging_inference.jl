@@ -35,7 +35,7 @@ function ramp_merging_inference(;
     end
     # solvers to compare, options: ground_truth, backprop (ours), inverseMCP (peters2021rss), mpc, 
     # heuristic_estimation (use initial states as goal estimation)
-    solver_string_lst = ["backprop"]
+    solver_string_lst = ["ground_truth", "backprop", "inverseMCP", "mpc", "heuristic_estimation"]
 
     #====================================#
     # Initialization of different solvers
@@ -108,22 +108,11 @@ function ramp_merging_inference(;
 
             # Start of the simulation loop
             for t in 1:n_sim_steps
-                time_exec_opponents = @elapsed strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, 
-                    game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
-                if receding_horizon_strategy.solution_status != PATHSolver.MCP_Solved
-                    if solver_string == "ground_truth"
-                        @info "Skipping the episode that ground truth fails..."
-                        @goto end_of_episode
-                    end
-                    @info "Opponent solve failed, re-initializing..."
-                    receding_horizon_strategy.last_solution = nothing
-                    receding_horizon_strategy.solution_status = nothing
-                    time_exec_opponents = @elapsed strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, 
-                        game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
-                end
+                strategy = solve_game_with_resolve!(receding_horizon_strategy, game, system_state)
                 #===========================================================#
-                # player 2 infers player 1's objective and plan her motion
+                # player 2 infers player 1's objective and plans her motion
                 if length(xs_observation) < vector_size
+                    # use a dummy strategy at the first few steps when observation is not sufficient
                     dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
                         control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng)
                     strategy.substrategies[ego_agent_id] = dummy_substrategy
@@ -131,37 +120,26 @@ function ramp_merging_inference(;
                 else
                     information_vector = reduce(vcat, xs_observation)
                     if solver_string == "backprop"
-                        #=================================# # backprop solver
+                        #=================================# # our solver
+                        # very first initialization (later use the previous estimation as warm start)
                         random_goal = mortar([system_state[Block(ii)][2:3] for ii in 1:num_player])
                         random_goal[Block(ego_agent_id)] = goal[Block(ego_agent_id)] # ego goal known
 
                         initial_estimation = !isnothing(goal_estimation) ? goal_estimation : random_goal
+                        # solve inverse game
                         goal_estimation, last_solution, i_, info_, time_exec = interactive_inference_by_backprop(mcp_game, xs_pre[1],
                             information_vector, initial_estimation, goal[Block(ego_agent_id)]; max_grad_steps, lr = 2.1e-2, 
                             last_solution = last_solution, num_player, ego_agent_id, observation_opponents_idx_set, ego_state_idx,
-                            )
+                        )
                         receding_horizon_strategy_ego.context_state = goal_estimation
-
-                        time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                            receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        if receding_horizon_strategy_ego.solution_status != PATHSolver.MCP_Solved
-                            @info "Ego solve failed, re-initializing..."
-                            receding_horizon_strategy_ego.last_solution = nothing
-                            receding_horizon_strategy_ego.solution_status = nothing
-                            time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                                receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        end
+                        # solve forward game
+                        time_forward = @elapsed strategy_ego = solve_game_with_resolve!(receding_horizon_strategy_ego, game, system_state)
                         time_exec += time_forward
-                        println(time_exec)
-                        solving_status = receding_horizon_strategy_ego.solution_status
-                        if solving_status == PATHSolver.MCP_Solved
-                            strategy.substrategies[ego_agent_id] = strategy_ego.substrategies[ego_agent_id]
-                        else
-                            dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
-                                control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng;
-                                max_acceleration = max_acceleration, strategy_type = "max_acceleration")
-                            strategy.substrategies[ego_agent_id] = dummy_substrategy
-                        end
+                        println(time_exec, "s")
+                        solving_status = check_solver_status!(
+                            receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
+                            ego_agent_id, horizon, rng
+                        )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]
                         #=================================#
                     elseif solver_string == "inverseMCP"
@@ -181,27 +159,15 @@ function ramp_merging_inference(;
                         last_solution = solution.status == PATHSolver.MCP_Solved ? solution : nothing
                         goal_estimation = reproduce_goal_estimation(goal[Block(ego_agent_id)], block_sizes_params, ego_agent_id, 
                             solution.variables[1:dim_params])
-
                         receding_horizon_strategy_ego.context_state = goal_estimation
-                        time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                            receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        if receding_horizon_strategy_ego.solution_status != PATHSolver.MCP_Solved
-                            @info "Ego solve failed, re-initializing..."
-                            receding_horizon_strategy_ego.last_solution = nothing
-                            receding_horizon_strategy_ego.solution_status = nothing
-                            time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                                receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        end
-                        solving_status = receding_horizon_strategy_ego.solution_status
+                        # solve forward game
+                        time_forward = @elapsed strategy_ego = solve_game_with_resolve!(receding_horizon_strategy_ego, game, system_state)
                         time_exec += time_forward
-                        if solving_status == PATHSolver.MCP_Solved
-                            strategy.substrategies[ego_agent_id] = strategy_ego.substrategies[ego_agent_id]
-                        else
-                            dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
-                                control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng;
-                                max_acceleration = max_acceleration, strategy_type = "max_acceleration")
-                            strategy.substrategies[ego_agent_id] = dummy_substrategy
-                        end
+                        println(time_exec, "s")
+                        solving_status = check_solver_status!(
+                            receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
+                            ego_agent_id, horizon, rng
+                        )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]
                         #=================================#                                        
                     elseif solver_string == "mpc"
@@ -244,27 +210,15 @@ function ramp_merging_inference(;
                         # use the current opponents' state as their desired state
                         time_exec = @elapsed goal_estimation = mortar([initial_state[Block(ii)][2:3] for ii in 1:num_player])
                         goal_estimation[Block(ego_agent_id)] = goal[Block(ego_agent_id)]
-
                         receding_horizon_strategy_ego.context_state = goal_estimation
-                        time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                            receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        if receding_horizon_strategy_ego.solution_status != PATHSolver.MCP_Solved
-                            @info "Ego solve failed, re-initializing..."
-                            receding_horizon_strategy_ego.last_solution = nothing
-                            receding_horizon_strategy_ego.solution_status = nothing
-                            time_forward = @elapsed strategy_ego = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy_ego.solver, game, system_state, 
-                                receding_horizon_strategy_ego; receding_horizon_strategy_ego.solve_kwargs...)
-                        end
+                        # solve forward game
+                        time_forward = @elapsed strategy_ego = solve_game_with_resolve!(receding_horizon_strategy_ego, game, system_state)
                         time_exec += time_forward
-                        solving_status = receding_horizon_strategy_ego.solution_status
-                        if solving_status == PATHSolver.MCP_Solved
-                            strategy.substrategies[ego_agent_id] = strategy_ego.substrategies[ego_agent_id]
-                        else
-                            dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
-                                control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng;
-                                max_acceleration = max_acceleration, strategy_type = "max_acceleration")
-                            strategy.substrategies[ego_agent_id] = dummy_substrategy
-                        end
+                        println(time_exec, "s")
+                        solving_status = check_solver_status!(
+                            receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
+                            ego_agent_id, horizon, rng
+                        )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]                        
                     elseif solver_string == "ground_truth"
                         #=================================# # ground truth (game-theoretic interaction in a centralized fashion)

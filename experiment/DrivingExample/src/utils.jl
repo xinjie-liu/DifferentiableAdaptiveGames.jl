@@ -551,7 +551,7 @@ function interactive_inference_by_backprop(
     ego_state_idx, 
 )
     """
-    back-propagation of the differentiable MCP solver
+    gradient steps using differentiable game solver on the observation likelihood loss
     """
     function likelihood_cost(τs_observed, goal_estimation, initial_state)
         solution = MCPGameSolver.solve_mcp_game(mcp_game, initial_state, 
@@ -619,6 +619,43 @@ function interactive_inference_by_backprop(
         initial_state -= x0_update
     end
     (; goal_estimation, last_solution, i_, solving_info, time_exec)
+end
+
+function solve_game_with_resolve!(receding_horizon_strategy, game, system_state)
+    """
+    solve forward game, resolve with constant velocity rollout as initialization if solve failed
+    """
+    strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, 
+        game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
+    if receding_horizon_strategy.solution_status != PATHSolver.MCP_Solved
+        @info "Solve failed, re-initializing..."
+        receding_horizon_strategy.last_solution = nothing
+        receding_horizon_strategy.solution_status = nothing
+        strategy = MCPGameSolver.solve_trajectory_game!(receding_horizon_strategy.solver, 
+            game, system_state, receding_horizon_strategy; receding_horizon_strategy.solve_kwargs...)
+    end
+
+    strategy
+end
+
+function check_solver_status!(
+    receding_horizon_strategy_ego, strategy, 
+    strategy_ego, game, system_state, ego_agent_id, horizon, rng
+)
+    """
+    Check solver status, if failed, overwrite with an emergency strategy
+    """
+    solving_status = receding_horizon_strategy_ego.solution_status
+    if solving_status == PATHSolver.MCP_Solved
+        strategy.substrategies[ego_agent_id] = strategy_ego.substrategies[ego_agent_id]
+    else
+        dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
+            control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng;
+            max_acceleration = max_acceleration, strategy_type = "max_acceleration")
+        strategy.substrategies[ego_agent_id] = dummy_substrategy
+    end
+
+    solving_status
 end
 
 function construct_observation_index_set(;
