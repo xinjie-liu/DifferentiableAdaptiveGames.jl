@@ -11,10 +11,6 @@ function highway_game(
 )
     ll = environment.roadway.opts.lane_length
     cost = let
-        # function traffic_light_cost(x)
-        #     px, py, v, θ = x
-        #     max(0.0, px - (ll - 0.4))^2
-        # end
         function target_cost(x, context_state)
             # my_norm_sqr(x[2] - context_state[1]) + my_norm_sqr(x[3] - context_state[2])
             px, py, v, θ = x
@@ -22,7 +18,6 @@ function highway_game(
             1.0 * (py - context_state[1])^2 + ((1.0 - tanh(4 * (px - (ll - 1.65)))) / 2) * (v * cos(θ) - context_state[2])^2 + 0.2 * θ^2
         end
         function control_cost(u)
-            # my_norm_sqr(u)
             a, δ = u
             a^2 + δ^2
         end
@@ -43,9 +38,6 @@ function highway_game(
             safe_distance_violation = mean(map(xs) do x
                 collision_cost(x, i)
             end)
-            # traffic_light_cost_ = mean(map(xs) do x
-            #     traffic_light_cost(x[Block(i)])
-            # end)
             1.0 * mean_target + 0.1 * control + collision_avoidance_coefficient * safe_distance_violation #+ 2.0 * traffic_light_cost_
         end
         function cost_function(xs, us, context_state)

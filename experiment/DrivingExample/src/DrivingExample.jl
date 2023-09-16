@@ -43,6 +43,5 @@ include("struct/highway_roadway.jl")
 include("struct/merging_roadway.jl")
 include("struct/intersection_roadway.jl")
 include("utils.jl")
-include("replay_trajectories.jl")
 
 end # module
