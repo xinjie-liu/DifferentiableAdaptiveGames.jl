@@ -1,4 +1,11 @@
-#== Mixed-Complementarity Problem Formulation (MCP) ==#
+#=== Mixed-Complementarity Problem Formulation (MCP) ===#
+
+"""
+This file contains problem formulation part of the MCP game solver code: casting open-loop
+Nash games as mixed complementarity problems (MCPs)
+A more optimized implementation of this solver is available at: 
+https://github.com/JuliaGameTheoreticPlanning/MCPTrajectoryGameSolver.jl
+"""
 
 struct MCPGame{T1<:TrajectoryGame,T2<:ParametricMCPs.ParametricMCP,T3,T4}
     game::T1
@@ -9,11 +16,11 @@ end
 
 function MCPGame(game, horizon, context_state_block_dimensions = 0)
     num_player = num_players(game)
-    state_dimension = state_dim(game.dynamics) # 12 for 3-player
-    control_dimension = control_dim(game.dynamics) # 6 for 3-player
-    problem_size = horizon * (state_dimension + control_dimension) # 360
-    state_block_dimensions = [state_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player] # 4 4 4
-    control_block_dimensions = [control_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player] # 2 2 2
+    state_dimension = state_dim(game.dynamics)
+    control_dimension = control_dim(game.dynamics)
+    problem_size = horizon * (state_dimension + control_dimension)
+    state_block_dimensions = [state_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player]
+    control_block_dimensions = [control_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player]
 
     x0, z, context_state = let
         @variables(
@@ -30,7 +37,7 @@ function MCPGame(game, horizon, context_state_block_dimensions = 0)
         BlockVector(context_state, context_state_block_dimensions) : nothing
 
     function trajectory_from_flattened_decision_variables(flattened_z)
-        states = let # 21-element vector, each element is 3-blocked vector
+        states = let
             future_states = eachcol(
                 reshape(flattened_z[1:(state_dimension * horizon)], state_dimension, horizon),
             )
@@ -39,7 +46,7 @@ function MCPGame(game, horizon, context_state_block_dimensions = 0)
             end
         end
 
-        control_inputs = let # 20-element vector, each element is 3-blocked vector
+        control_inputs = let
             controls = eachcol(
                 reshape(
                     flattened_z[(state_dimension * horizon + 1):end],

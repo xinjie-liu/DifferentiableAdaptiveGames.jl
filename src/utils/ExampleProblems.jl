@@ -7,7 +7,6 @@ using TrajectoryGamesExamples: planar_double_integrator
 using LinearAlgebra: norm_sqr, norm
 using Statistics: mean
 
-
 export n_player_collision_avoidance
 
 function generate_new_targets_if_reached!(

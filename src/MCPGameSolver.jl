@@ -44,15 +44,13 @@ using Makie: Makie
 using Colors: @colorant_str
 using JLD2: JLD2
 
-include("ExampleProblems.jl")
+include("utils/ExampleProblems.jl")
 using .ExampleProblems: n_player_collision_avoidance, two_player_guidance_game
 
-include("utils.jl")
+include("utils/utils.jl")
 include("problem_formulation.jl")
 include("solve.jl")
-include("inverse_MCP_solver.jl")
-include("backprop_inverse_game_solver.jl")
-
+include("baseline/inverse_MCP_solver.jl")
 
 function main(; 
     initial_state = mortar([
@@ -63,6 +61,9 @@ function main(;
     ]),
     goal = mortar([[0.0, -2.7], [2, -2.8], [2.7, 1], [2.7, -1.1]])
 )
+    """
+    An example of the MCP game solver
+    """
     environment = PolygonEnvironment(6, 8)
     game = n_player_collision_avoidance(4; environment, min_distance = 1.2)
     horizon = 20

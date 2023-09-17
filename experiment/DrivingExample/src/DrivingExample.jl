@@ -1,6 +1,6 @@
 module DrivingExample
 
-using MCPGameSolver: MCPGameSolver, MCPCoupledOptimizationSolver, WarmStartRecedingHorizonStrategy, NNParamsPredictor
+using MCPGameSolver: MCPGameSolver, MCPCoupledOptimizationSolver, WarmStartRecedingHorizonStrategy
 using PATHSolver: PATHSolver
 using TrajectoryGamesBase: TrajectoryGamesBase, TrajectoryGame, rollout, 
                 GeneralSumCostStructure, ProductDynamics, TrajectoryGame, TrajectoryGameCost,

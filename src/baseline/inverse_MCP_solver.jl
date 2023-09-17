@@ -1,3 +1,8 @@
+"""
+This file contains an implementation of the KKT-constrained inverse game solver,
+proposed in: https://arxiv.org/pdf/2106.03611.pdf
+"""
+
 struct InverseMCPProblem
     fill_F!::Any
     fill_J::Any
@@ -47,7 +52,7 @@ function InverseMCPProblem(
             end
         end
 
-        control_inputs = let # 20-element vector, each element is 3-blocked vector
+        control_inputs = let
             controls = eachcol(
                 reshape(
                     flattened_z[(state_dimension * horizon + 1):end],

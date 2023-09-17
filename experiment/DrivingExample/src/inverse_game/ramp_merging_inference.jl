@@ -35,7 +35,7 @@ function ramp_merging_inference(;
     end
     # solvers to compare, options: ground_truth, backprop (ours), inverseMCP (peters2021rss), mpc, 
     # heuristic_estimation (use initial states as goal estimation)
-    solver_string_lst = ["ground_truth", "backprop", "inverseMCP", "mpc", "heuristic_estimation"]
+    solver_string_lst = ["backprop", "ground_truth", "inverseMCP", "mpc", "heuristic_estimation"]
 
     #====================================#
     # Initialization of different solvers
@@ -108,7 +108,8 @@ function ramp_merging_inference(;
 
             # Start of the simulation loop
             for t in 1:n_sim_steps
-                strategy = solve_game_with_resolve!(receding_horizon_strategy, game, system_state)
+                # opponents' solve
+                time_exec_opponents = @elapsed strategy = solve_game_with_resolve!(receding_horizon_strategy, game, system_state)
                 #===========================================================#
                 # player 2 infers player 1's objective and plans her motion
                 if length(xs_observation) < vector_size
@@ -138,7 +139,7 @@ function ramp_merging_inference(;
                         println(time_exec, "s")
                         solving_status = check_solver_status!(
                             receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
-                            ego_agent_id, horizon, rng
+                            ego_agent_id, horizon, max_acceleration, rng
                         )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]
                         #=================================#
@@ -166,7 +167,7 @@ function ramp_merging_inference(;
                         println(time_exec, "s")
                         solving_status = check_solver_status!(
                             receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
-                            ego_agent_id, horizon, rng
+                            ego_agent_id, horizon, max_acceleration, rng
                         )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]
                         #=================================#                                        
@@ -191,7 +192,7 @@ function ramp_merging_inference(;
                             last_solution = mpc_sol.info.raw_solution
                             strategy.substrategies[ego_agent_id] = LiftedTrajectoryStrategy(ego_agent_id, [(; mpc_sol.xs, mpc_sol.us)], [1], nothing, rng, Ref(0))
                         else
-                            # if mpc fails to solve, use zero control input
+                            # if mpc fails to solve, use emergency strategy
                             last_solution = nothing
                             dummy_substrategy, _ = create_dummy_strategy(game, system_state, 
                                 control_dim(game.dynamics.subsystems[ego_agent_id]), horizon, ego_agent_id, rng;
@@ -217,7 +218,7 @@ function ramp_merging_inference(;
                         println(time_exec, "s")
                         solving_status = check_solver_status!(
                             receding_horizon_strategy_ego, strategy, strategy_ego, game, system_state, 
-                            ego_agent_id, horizon, rng
+                            ego_agent_id, horizon, max_acceleration, rng
                         )
                         predicted_opponents_trajectory = strategy_ego.substrategies[opponents_id]                        
                     elseif solver_string == "ground_truth"
@@ -291,10 +292,6 @@ function ramp_merging_inference(;
                     visualization.pointmasses[] = x
                 end
                 sleep(0.01)
-            end
-            if visualization.stop_button.clicked[]
-                visualization.stop_button.clicked[] = false
-                break
             end
             @label end_of_episode
         end

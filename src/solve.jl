@@ -1,3 +1,9 @@
+"""
+This file contains solving part of the MCP game solver code.
+A more optimized implementation of this solver is available at: 
+https://github.com/JuliaGameTheoreticPlanning/MCPTrajectoryGameSolver.jl
+"""
+
 function solve_mcp_game(
     mcp_game::MCPGame,
     x0,
@@ -84,8 +90,8 @@ function TrajectoryGamesBase.solve_trajectory_game!(
 
     horizon = solver.mcp_game.horizon
     num_player = num_players(game)
-    state_block_dimensions = [state_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player] # 4 4 4
-    control_block_dimensions = [control_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player] # 2 2 2
+    state_block_dimensions = [state_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player]
+    control_block_dimensions = [control_dim(game.dynamics.subsystems[ii]) for ii in 1:num_player]
 
     substrategies = let
         map(1:num_player) do ii
