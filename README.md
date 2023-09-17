@@ -15,7 +15,7 @@ An adaptive game-theoretic planner that jointly infers players' objectives and s
 
 <a href ="https://arxiv.org/abs/2211.13779"><img src="https://xinjie-liu.github.io/assets/img/liu2023ral_teaser.png"></a>
 
-<a href ="https://xinjie-liu.github.io/assets/pdf/Liu2023learningPoster(full).pdf"><img src="https://xinjie-liu.github.io/assets/img/liu2023ral_poster.png" width = "560" height = "315"></a>
+<a href ="https://xinjie-liu.github.io/assets/pdf/Liu2023learningPoster(full).pdf"><img src="https://xinjie-liu.github.io/assets/img/liu2023ral_poster.png" width = "560" height = "396"></a>
 
 
 
