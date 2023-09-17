@@ -231,13 +231,6 @@ function ramp_merging_inference(;
                         error("Not a valid solver name!") 
                     end
                 end
-                solving_status = solver_string == "ground_truth" ? receding_horizon_strategy.solution_status : solving_status
-                if solving_status != PATHSolver.MCP_Solved
-                    infeasible_step_counter += 1
-                    solver_failure += 1
-                else
-                    infeasible_step_counter = 0
-                end
                 #===========================================================#
                 if visualization.skip_button.clicked[]
                     visualization.skip_button.clicked[] = false
