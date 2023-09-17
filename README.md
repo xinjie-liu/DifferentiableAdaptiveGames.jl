@@ -10,8 +10,8 @@ An adaptive game-theoretic planner that jointly infers players' objectives and s
 @article{liu2022learning,
   title={Learning to Play Trajectory Games Against Opponents with Unknown Objectives},
   author={Liu, Xinjie and Peters, Lasse and Alonso-Mora, Javier},
-  journal={arXiv preprint arXiv:2211.13779},
-  year={2022}
+  journal={IEEE Robotics and Automation Letters (RA-L)},
+  year={2023}
 }
 ```
 ## Run the Ramp Merging Experiment
