@@ -35,7 +35,7 @@ function ramp_merging_inference(;
     end
     # solvers to compare, options: ground_truth, backprop (ours), inverseMCP (peters2021rss), mpc, 
     # heuristic_estimation (use initial states as goal estimation)
-    solver_string_lst = ["backprop"]
+    solver_string_lst = ["ground_truth", "backprop"]
 
     #====================================#
     # Initialization of different solvers
