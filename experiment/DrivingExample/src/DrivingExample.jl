@@ -44,4 +44,8 @@ include("struct/merging_roadway.jl")
 include("struct/intersection_roadway.jl")
 include("utils.jl")
 
+"""
+This package contains experiment code for the ramp merging example in our work: https://arxiv.org/abs/2211.13779
+"""
+
 end # module
