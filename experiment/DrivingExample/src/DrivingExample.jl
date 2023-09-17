@@ -36,7 +36,7 @@ using HypothesisTests: HypothesisTests
 # using CairoMakie
 
 include("game/games.jl")
-include("inverse_game/ramp_merging_inference.jl")
+include("script/ramp_merging_inference.jl")
 include("baseline/mpc.jl")
 include("struct/infrastructure.jl")
 include("struct/highway_roadway.jl")
