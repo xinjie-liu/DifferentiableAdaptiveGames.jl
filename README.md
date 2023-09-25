@@ -71,3 +71,7 @@ Note: This repository contains the original solver implementation used in our re
 5. Run the tracking example
 
 `Jackal.launch()`
+
+## License
+
+This package uses PATH solver (via [PATHSolver.jl](https://github.com/chkwon/PATHSolver.jl)) under the hood. Larger-sized problems require to have a license key. By courtesy of Steven Dirkse, Michael Ferris, and Tudd Munson, temporary license keys are available free of charge. For more details about the license key, please consult [PATHSolver.jl](https://github.com/chkwon/PATHSolver.jl) (License section). 
