@@ -23,7 +23,7 @@ An adaptive game-theoretic planner that jointly infers players' objectives and s
 
 This package contains a nonlinear trajectory game solver (`/src/`) based on a mixed complementarity problem (MCP) formulation. The solver is made differentiable by applying the implicit function theorem (IFT). Experiment code employing this differentiability feature for adaptive model-predictive game-play is provided in `/experiment/`. Folder `/experiment/DrivingExample/` contains code for the ramp-merging experiment in our paper, and hardware experiment code on Jackal UGV robots is in `/experiment/Jackal/`. 
 
-Acknowledgments: Most of the infrastructure used in the Jackal experiment is from a past project by [@schmidma](https://github.com/schmidma). 
+Acknowledgments: Most of the infrastructure used in the Jackal experiment is from a past project by [@schmidma](https://github.com/schmidma), who provided a package for controlling the Jackal robot in ROS using Julia code. 
 
 Note: This repository contains the original solver implementation used in our research, "Learning to Play Trajectory Games Against Opponents with Unknown Objectives." Besides, we also published a more optimized implementation for the differentiable game solver ([link](https://github.com/JuliaGameTheoreticPlanning/MCPTrajectoryGameSolver.jl)). We kindly ask you to cite our paper if you use either of the implementations in your research. Thanks!
 
