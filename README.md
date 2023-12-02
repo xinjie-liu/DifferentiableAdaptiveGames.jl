@@ -5,12 +5,15 @@
 An adaptive game-theoretic planner that jointly infers players' objectives and solves for generalized Nash equilibrium trajectories, enabled by differentiating through a trajectory game solver. The solver is made end-to-end differentiable and supports direct combination with other learning-based components. This is a software package produced by research [Learning to Play Trajectory Games Against Opponents with Unknown Objectives](https://xinjie-liu.github.io/projects/game/). Please consult our project website for more information. 
 
 ```
-@article{liu2022learning,
-  title={Learning to Play Trajectory Games Against Opponents with Unknown Objectives},
+@article{liu2023learning,
   author={Liu, Xinjie and Peters, Lasse and Alonso-Mora, Javier},
-  journal={IEEE Robotics and Automation Letters (RA-L)},
-  year={2023}
-}
+  journal={IEEE Robotics and Automation Letters}, 
+  title={Learning to Play Trajectory Games Against Opponents With Unknown Objectives}, 
+  year={2023},
+  volume={8},
+  number={7},
+  pages={4139-4146},
+  doi={10.1109/LRA.2023.3280809}}
 ```
 
 <a href ="https://arxiv.org/abs/2211.13779"><img src="https://xinjie-liu.github.io/assets/img/liu2023ral_teaser.png"></a>
