@@ -30,6 +30,27 @@ Acknowledgments: Most of the infrastructure used in the Jackal experiment is fro
 
 Note: This repository contains the original solver implementation used in our research, "Learning to Play Trajectory Games Against Opponents with Unknown Objectives." Besides, we also published a more optimized implementation for the differentiable game solver ([link](https://github.com/JuliaGameTheoreticPlanning/MCPTrajectoryGameSolver.jl)). We kindly ask you to cite our paper if you use either of the implementations in your research. Thanks!
 
+## Run a Four-Player Collision Avoidance Example
+
+1.  Open REPL (Julia 1.9) in the root directory 
+
+`julia`
+
+2. Activate the package environment
+
+`]activate .`
+
+3. Instantiate the environment if you haven't done so before
+
+`]instantiate`
+
+4. Precompile
+
+`using MCPGameSolver`
+
+5. Run the example
+
+`MCPGameSolver.main()`
 
 ## Run the Ramp Merging Experiment
 
