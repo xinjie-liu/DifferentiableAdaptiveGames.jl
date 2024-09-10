@@ -44,39 +44,27 @@ Note: This repository contains the original solver implementation used in our re
 
 ## Run the Ramp Merging Experiment
 
-1. Open REPL (Julia 1.9) in the directory `/experiment/DrivingExample`
-
-`julia`
+1. Open REPL (Julia 1.9) in the directory `/experiment/DrivingExample`: `julia`
 
 2. Activate the package environment by hitting `]` to enter the package mode first and then type: `activate .`
 
 3. Instantiate the environment in the package mode if you haven't done so before by typing `instantiate`
 
-4. Exit the package mode by hitting the backspace key; precompile the package
+4. Exit the package mode by hitting the backspace key; precompile the package: `using DrivingExample`
 
-`using DrivingExample`
-
-5. Run the ramp merging example
-
-`DrivingExample.ramp_merging_inference()`
+5. Run the ramp merging example: `DrivingExample.ramp_merging_inference()`
 
 ## Run the Two-Player Tracking (Jackal) Experiment
 
-1. Open REPL (Julia 1.9) in the directory `/experiment/Jackal`
-
-`julia`
+1. Open REPL (Julia 1.9) in the directory `/experiment/Jackal`: `julia`
 
 2. Activate the package environment by hitting `]` to enter the package mode first and then type: `activate .`
 
 3. Instantiate the environment in the package mode if you haven't done so before by typing `instantiate`
 
-4. Exit the package mode by hitting the backspace key; precompile the package
+4. Exit the package mode by hitting the backspace key; precompile the package: `using Jackal`
 
-`using Jackal`
-
-5. Run the tracking example
-
-`Jackal.launch()`
+5. Run the tracking example: `Jackal.launch()`
 
 ## License
 
