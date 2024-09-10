@@ -32,25 +32,15 @@ Note: This repository contains the original solver implementation used in our re
 
 ## Run a Four-Player Collision Avoidance Example
 
-1.  Open REPL (Julia 1.9) in the root directory 
+1.  Open REPL (Julia 1.9) in the root directory: `julia`
 
-`julia`
+2. Activate the package environment by hitting `]` to enter the package mode first and then type: `activate .`
 
-2. Activate the package environment
+3. Instantiate the environment in the package mode if you haven't done so before by typing `instantiate`
 
-`]activate .`
+4. Exit the package mode by hitting the backspace key; precompile the package: `using MCPGameSolver`
 
-3. Instantiate the environment if you haven't done so before
-
-`]instantiate`
-
-4. Precompile
-
-`using MCPGameSolver`
-
-5. Run the example
-
-`MCPGameSolver.main()`
+5. Run the example: `MCPGameSolver.main()`
 
 ## Run the Ramp Merging Experiment
 
@@ -58,15 +48,11 @@ Note: This repository contains the original solver implementation used in our re
 
 `julia`
 
-2. Activate the package environment
+2. Activate the package environment by hitting `]` to enter the package mode first and then type: `activate .`
 
-`]activate .`
+3. Instantiate the environment in the package mode if you haven't done so before by typing `instantiate`
 
-3. Instantiate the environment if you haven't done so before
-
-`]instantiate`
-
-4. Precompile
+4. Exit the package mode by hitting the backspace key; precompile the package
 
 `using DrivingExample`
 
@@ -80,15 +66,11 @@ Note: This repository contains the original solver implementation used in our re
 
 `julia`
 
-2. Activate the package environment
+2. Activate the package environment by hitting `]` to enter the package mode first and then type: `activate .`
 
-`]activate .`
+3. Instantiate the environment in the package mode if you haven't done so before by typing `instantiate`
 
-3. Instantiate the environment if you haven't done so before
-
-`]instantiate`
-
-4. Precompile
+4. Exit the package mode by hitting the backspace key; precompile the package
 
 `using Jackal`
 
